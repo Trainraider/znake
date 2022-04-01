@@ -4,6 +4,12 @@ const c = @cImport({
     @cInclude("stdlib.h");
 });
 
+const Allocator = std.mem.Allocator;
+const allocator = std.heap.page_allocator;
+const mul = std.math.mul;
+const sub = std.math.sub;
+const assert = std.debug.assert;
+
 const Coord = struct {
     x: u64,
     y: u64,
@@ -16,9 +22,99 @@ const Direction = enum {
     down,
 };
 
+const Snake = struct {
+    x: []u64,
+    y: []u64,
+    dir: ?Direction = null,
+    length: u64,
+    alloc: Allocator,
+    display: *zbox.Buffer,
+    headCell: zbox.Cell = .{
+        .char = 'ö',
+        .attribs = .{ .bg_green = true, .fg_black = true, .bold = true,},
+    },
+    bodyCell: zbox.Cell= .{
+        .char = ' ',
+        .attribs = .{ .bg_green = true,},
+    },
+    _head: u64,
+    _tail: u64,
+
+    pub fn init(alloc: Allocator, display: *zbox.Buffer, length: u64) !Snake {
+        assert(length > 0);
+        const size = try zbox.size();
+        const area = mul(u64, size.width, size.height) catch 2048;
+        var snake = Snake{
+            .x = try alloc.alloc(u64, area),
+            .y = try alloc.alloc(u64, area),
+
+            .length = length,
+            .alloc = alloc,
+            .display = display,
+            ._head = 0,
+            ._tail = sub(u64, length, 1) catch unreachable,
+        };
+        
+        for (snake.x[1..length]) |*x| {
+            x.* = 0;
+        }
+        
+        for (snake.y[1..length]) |*y| {
+            y.* = 0;
+        }
+
+        snake.y[0] = size.height >> 1;
+        snake.x[0] = size.width >> 1;
+        
+        return snake;
+    }
+
+    pub fn deinit(self: Snake) void {
+        self.alloc.free(self.x);
+        self.alloc.free(self.y);
+    }
+
+    pub fn advance(self: *Snake) !void {
+        
+        const size = try zbox.size();
+        
+        var snakeHead = Coord {
+            .x = self.*.x[self.*._head],
+            .y = self.*.y[self.*._head],
+        };
+        
+        var snakeTail = Coord {
+            .x = self.*.x[self.*._tail],
+            .y = self.*.y[self.*._tail],
+        };
+
+        if (self.*.dir) |s| {
+
+            self.*.display.cellRef(snakeHead.y, snakeHead.x).* = self.*.bodyCell;
+
+            switch (s) {
+                .left => if (snakeHead.x > 0) {snakeHead.x -= 1;},
+                .right => if (snakeHead.x < size.width - 1) {snakeHead.x += 1;},
+                .up => if (snakeHead.y > 0) {snakeHead.y -= 1;},
+                .down => if (snakeHead.y < size.height - 1) {snakeHead.y += 1;},
+            }
+
+            self.*.x[self.*._tail] = snakeHead.x;
+            self.*.y[self.*._tail] = snakeHead.y;
+
+            self.*._head = self.*._tail;
+
+            self.*._tail = sub(u64, self.*._tail, 1) catch sub(u64, self.*.length, 1) catch unreachable;
+
+            self.*.display.cellRef(snakeHead.y, snakeHead.x).* = self.*.headCell;
+            
+            self.*.display.cellRef(snakeTail.y, snakeTail.x).* = .{.char = ' ',};
+        }
+    }
+};
+
 pub fn main() !void {
-    const alloc = std.heap.page_allocator;
-    try zbox.init(alloc);
+    try zbox.init(allocator);
     defer zbox.deinit();
 
     try zbox.cursorHide();
@@ -27,45 +123,31 @@ pub fn main() !void {
     try zbox.handleSignalInput();
 
     var size = try zbox.size();
-    var output = try zbox.Buffer.init(alloc, size.height, size.width);
+    var output = try zbox.Buffer.init(allocator, size.height, size.width);
     defer output.deinit();
 
-    var snakeDir : ?Direction = null;
-
-    var snakeHead = Coord{
-        .x = @divTrunc(size.width, 2),
-        .y = @divTrunc(size.height, 2),
-    };
+    var snake = try Snake.init(allocator, &output, 60);
+    defer snake.deinit();
 
     while (try zbox.nextEvent()) |e| {
-        output.clear();
 
         size = try zbox.size();
         try output.resize(size.height, size.width);
 
         switch (e) {
             .escape => return,
-            .left => snakeDir = Direction.left,
-            .right => snakeDir = Direction.right,
-            .up => snakeDir = Direction.up,
-            .down => snakeDir = Direction.down,
+            .left => snake.dir = Direction.left,
+            .right => snake.dir = Direction.right,
+            .up => snake.dir = Direction.up,
+            .down => snake.dir = Direction.down,
             else => {},
         }
-        if (snakeDir) |s| {
-            switch (s) {
-                .left => if (snakeHead.x > 0) {snakeHead.x -= 1;},
-                .right => if (snakeHead.x < size.width - 1) {snakeHead.x += 1;},
-                .up => if (snakeHead.y > 0) {snakeHead.y -= 1;},
-                .down => if (snakeHead.y < size.height - 1) {snakeHead.y += 1;},
-            }
-        }
+
+        try snake.advance();
         
         var score_curs = output.cursorAt(0,3);
         try score_curs.writer().print("420", .{});
-        output.cellRef(snakeHead.y, snakeHead.x).* = .{
-            .char = '#',
-            .attribs = .{ .fg_green = true },
-        };
+        
         try zbox.push(output);
     }
 }
