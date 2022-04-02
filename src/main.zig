@@ -30,8 +30,13 @@ const Snake = struct {
     length: u64,
     alloc: Allocator,
     display: *zbox.Buffer,
+    dead: bool = false,
     headCell: zbox.Cell = .{
-        .char = 'ö',
+        .char = '⍨',
+        .attribs = .{ .bg_green = true, .fg_black = true, .bold = true,},
+    },
+    deadCell: zbox.Cell = .{
+        .char = 'ӧ',
         .attribs = .{ .bg_green = true, .fg_black = true, .bold = true,},
     },
     bodyCell: zbox.Cell= .{
@@ -92,24 +97,27 @@ const Snake = struct {
         if (self.*.dir) |s| {
 
             self.*.display.cellRef(snakeHead.y, snakeHead.x).* = self.*.bodyCell;
+            if (!self.*.dead) {
+                switch (s) {
+                    .left => if (snakeHead.x > 0) {snakeHead.x -= 1;},
+                    .right => if (snakeHead.x < size.width - 1) {snakeHead.x += 1;},
+                    .up => if (snakeHead.y > 0) {snakeHead.y -= 1;},
+                    .down => if (snakeHead.y < size.height - 1) {snakeHead.y += 1;},
+                }
 
-            switch (s) {
-                .left => if (snakeHead.x > 0) {snakeHead.x -= 1;},
-                .right => if (snakeHead.x < size.width - 1) {snakeHead.x += 1;},
-                .up => if (snakeHead.y > 0) {snakeHead.y -= 1;},
-                .down => if (snakeHead.y < size.height - 1) {snakeHead.y += 1;},
+                if (self.*.display.cellRef(snakeHead.y, snakeHead.x).*.attribs.bg_green == true) self.*.dead = true;
+
+                self.*.x[self.*._tail] = snakeHead.x;
+                self.*.y[self.*._tail] = snakeHead.y;
+
+                self.*._head = self.*._tail;
+
+                self.*._tail = sub(u64, self.*._tail, 1) catch sub(u64, self.*.length, 1) catch unreachable;
+
+                self.*.display.cellRef(snakeHead.y, snakeHead.x).* = if (self.*.dead) self.*.deadCell else self.*.headCell;
+                
+                self.*.display.cellRef(snakeTail.y, snakeTail.x).* = .{.char = ' ',};
             }
-
-            self.*.x[self.*._tail] = snakeHead.x;
-            self.*.y[self.*._tail] = snakeHead.y;
-
-            self.*._head = self.*._tail;
-
-            self.*._tail = sub(u64, self.*._tail, 1) catch sub(u64, self.*.length, 1) catch unreachable;
-
-            self.*.display.cellRef(snakeHead.y, snakeHead.x).* = self.*.headCell;
-            
-            self.*.display.cellRef(snakeTail.y, snakeTail.x).* = .{.char = ' ',};
         }
     }
 };
