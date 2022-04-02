@@ -1,11 +1,12 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const zbox = @import("zbox");
 const c = @cImport({
     @cInclude("stdlib.h");
 });
 
 const Allocator = std.mem.Allocator;
-const allocator = std.heap.page_allocator;
+const allocator: Allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;
 const mul = std.math.mul;
 const sub = std.math.sub;
 const assert = std.debug.assert;
@@ -150,4 +151,8 @@ pub fn main() !void {
         
         try zbox.push(output);
     }
+}
+
+test "main" {
+    try main();
 }
