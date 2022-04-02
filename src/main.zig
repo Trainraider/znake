@@ -145,10 +145,10 @@ pub fn main() !void {
 
         switch (e) {
             .escape => return,
-            .left => snake.dir = Direction.left,
-            .right => snake.dir = Direction.right,
-            .up => snake.dir = Direction.up,
-            .down => snake.dir = Direction.down,
+            .left => if (snake.dir != Direction.right) {snake.dir = Direction.left;},
+            .right => if (snake.dir != Direction.left) {snake.dir = Direction.right;},
+            .up => if (snake.dir != Direction.down) {snake.dir = Direction.up;},
+            .down => if (snake.dir != Direction.up) {snake.dir = Direction.down;},
             else => {},
         }
 
