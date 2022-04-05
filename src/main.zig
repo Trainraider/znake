@@ -10,6 +10,7 @@ const allocator: Allocator = if (builtin.is_test) std.testing.allocator else std
 const mul = std.math.mul;
 const sub = std.math.sub;
 const assert = std.debug.assert;
+const RndGen = std.rand.DefaultPrng;
 
 const Coord = struct {
     x: u64,
@@ -79,7 +80,8 @@ const Grid = struct {
 
     }
 
-    fn getCell(self: Grid, x: u64, y: u64) bool {
+    fn getCell(self: Grid, x: u64, y: u64) !bool {
+        if (x >= self.width or y >= self.height << 1) return GridError.OutOfBounds;
         const upperHalf: bool = (y & 1 == 0 );
         const attribs = self.display.cellRef(self.y + (y >> 1), self.x + x).*.attribs;
 
@@ -88,6 +90,22 @@ const Grid = struct {
         } else {
             return attribs.fg_green;
         }
+    }
+};
+
+const Food = struct {
+    x: u64,
+    y: u64,
+    rnd: std.rand.Xoshiro256,
+    display: *Grid,
+
+    fn place(self: *Food) void {
+        while (true) {
+            self.*.x = self.*.rnd.random().int(u64) % self.*.display.width;
+            self.*.y = self.*.rnd.random().int(u64) % (self.*.display.height << 1);
+            if (!(self.*.display.getCell(self.*.x, self.*.y) catch unreachable)) break;
+        }
+        self.*.display.setCell(self.*.x, self.*.y, true) catch unreachable;
     }
 };
 
@@ -126,6 +144,8 @@ const Snake = struct {
 
         snake.y[0] = display.*.height;
         snake.x[0] = display.*.width >> 1;
+
+        try display.setCell(snake.x[0], snake.y[0], true);
         
         return snake;
     }
@@ -135,7 +155,7 @@ const Snake = struct {
         self.alloc.free(self.y);
     }
 
-    pub fn advance(self: *Snake) !void {
+    pub fn advance(self: *Snake, food: *Food) !void {
         
         var snakeHead = Coord {
             .x = self.*.x[self.*._head],
@@ -165,8 +185,15 @@ const Snake = struct {
 
                 self.*._tail = sub(u64, self.*._tail, 1) catch sub(u64, self.*.length, 1) catch unreachable;
 
-                try self.*.display.setCell(snakeTail.x, snakeTail.y, false);
-                if (self.display.getCell(snakeHead.x, snakeHead.y)) self.*.dead = true;
+                self.*.display.setCell(snakeTail.x, snakeTail.y, false) catch {};
+                if (self.display.getCell(snakeHead.x, snakeHead.y) catch true) {
+                    if (snakeHead.x == food.*.x and snakeHead.y == food.*.y){
+                        self.*.length += 10;
+                        food.*.place();
+                    } else {
+                        self.*.dead = true;
+                    }
+                }
                 
                 try self.*.display.setCell(snakeHead.x, snakeHead.y, true);
 
@@ -176,6 +203,14 @@ const Snake = struct {
 };
 
 pub fn main() !void {
+    const random = try std.fs.openFileAbsolute("/dev/random", .{
+        .mode = std.fs.File.OpenMode.read_only,
+    });
+    defer random.close();
+    const seed: u64 = try random.reader().readIntNative(u64);
+
+    var rnd = RndGen.init(seed);
+
     try zbox.init(allocator);
     defer zbox.deinit();
 
@@ -193,6 +228,14 @@ pub fn main() !void {
     var snake = try Snake.init(allocator, &grid, 30);
     defer snake.deinit();
 
+    var food = Food {
+        .x = undefined,
+        .y = undefined,
+        .rnd = rnd,
+        .display = &grid,
+    };
+    food.place();
+
     while (try zbox.nextEvent()) |e| {
 
         size = try zbox.size();
@@ -207,7 +250,7 @@ pub fn main() !void {
             else => {},
         }
 
-        try snake.advance();
+        try snake.advance(&food);
         
         var score_curs = output.cursorAt(0,3);
         try score_curs.writer().print("420", .{});
