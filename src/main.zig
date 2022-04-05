@@ -209,8 +209,8 @@ pub fn main() !void {
     const random = try std.fs.openFileAbsolute("/dev/random", .{
         .mode = std.fs.File.OpenMode.read_only,
     });
-    defer random.close();
     const seed: u64 = try random.reader().readIntNative(u64);
+    random.close();
 
     var rnd = RndGen.init(seed);
 
