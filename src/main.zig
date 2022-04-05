@@ -118,8 +118,8 @@ const Food = struct {
 };
 
 const Snake = struct {
-    x: []u64,
-    y: []u64,
+    x: []?u64,
+    y: []?u64,
     dir: ?Direction = null,
     length: u64,
     alloc: Allocator,
@@ -132,8 +132,8 @@ const Snake = struct {
         assert(length > 0);
         const area = mul(u64, display.*.width, display.*.height) catch 4096;
         var snake = Snake{
-            .x = try alloc.alloc(u64, area),
-            .y = try alloc.alloc(u64, area),
+            .x = try alloc.alloc(?u64, area),
+            .y = try alloc.alloc(?u64, area),
 
             .length = length,
             .alloc = alloc,
@@ -141,19 +141,11 @@ const Snake = struct {
             ._head = 0,
             ._tail = sub(u64, length, 1) catch unreachable,
         };
-        
-        for (snake.x[1..length]) |*x| {
-            x.* = 0;
-        }
-        
-        for (snake.y[1..length]) |*y| {
-            y.* = 0;
-        }
 
         snake.y[0] = display.*.height;
         snake.x[0] = display.*.width >> 1;
 
-        try display.setCell(snake.x[0], snake.y[0], true);
+        display.setCell(snake.x[0].?, snake.y[0].?, true) catch unreachable;
         
         return snake;
     }
@@ -166,14 +158,15 @@ const Snake = struct {
     pub fn advance(self: *Snake, food: *Food) !void {
         
         var snakeHead = Coord {
-            .x = self.*.x[self.*._head],
-            .y = self.*.y[self.*._head],
+            .x = self.*.x[self.*._head].?,
+            .y = self.*.y[self.*._head].?,
         };
         
-        var snakeTail = Coord {
-            .x = self.*.x[self.*._tail],
-            .y = self.*.y[self.*._tail],
-        };
+        var snakeTail: ?Coord = if (self.*.x[self.*._tail] != null and self.*.y[self.*._tail] != null) 
+        .{
+            .x = self.*.x[self.*._tail].?,
+            .y = self.*.y[self.*._tail].?,
+        } else null;
 
         if (self.*.dir) |s| {
 
@@ -193,7 +186,9 @@ const Snake = struct {
 
                 self.*._tail = sub(u64, self.*._tail, 1) catch sub(u64, self.*.length, 1) catch unreachable;
 
-                self.*.display.setCell(snakeTail.x, snakeTail.y, false) catch {};
+                if (snakeTail) |st| {
+                    self.*.display.setCell(st.x, st.y, false) catch unreachable;
+                }
                 if (self.display.getCell(snakeHead.x, snakeHead.y) catch true) {
                     if (snakeHead.x == food.*.x and snakeHead.y == food.*.y){
                         self.*.length += 10;
