@@ -228,7 +228,8 @@ pub fn main() !void {
 
     var grid = Grid.init(&output, 0, 1, size.width, size.height - 1);
 
-    var snake = try Snake.init(allocator, &grid, 30);
+    const initial_length = 30;
+    var snake = try Snake.init(allocator, &grid, initial_length);
     defer snake.deinit();
 
     var food = Food {
@@ -256,7 +257,7 @@ pub fn main() !void {
         try snake.advance(&food);
         
         var score_curs = output.cursorAt(0,3);
-        try score_curs.writer().print("420", .{});
+        try score_curs.writer().print("Score: {d}", .{snake.length - initial_length});
         
         try zbox.push(output);
     }
