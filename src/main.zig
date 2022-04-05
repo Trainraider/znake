@@ -67,15 +67,23 @@ const Grid = struct {
         if (x >= self.width or y >= self.height << 1) return GridError.OutOfBounds;
 
         const upperHalf: bool = (y & 1 == 0 );
-        const op: u2 = (@as(u2, @boolToInt(on)) << 1) + @as(u2, @boolToInt(upperHalf));
+
+        const Op = enum(u2) {
+            LOWER_OFF,
+            UPPER_OFF,
+            LOWER_ON,
+            UPPER_ON,
+        };
+        
+        const op: Op = @intToEnum(Op, (@as(u2, @boolToInt(on)) << 1) + @as(u2, @boolToInt(upperHalf)));
 
         var cell = self.*.display.cellRef(self.y + (y >> 1), self.x + x);
         var attribs = &cell.*.attribs;
         switch (op) {
-            0 => {cell.char = '▄'; attribs.*.fg_green = false; attribs.*.fg_black = true;},
-            1 => {cell.char = '▄'; attribs.*.bg_black = true; attribs.*.bg_green = false;},
-            2 => {cell.char = '▄'; attribs.*.fg_green = true; attribs.*.fg_black = false;},
-            3 => {cell.char = '▄'; attribs.*.bg_black = false; attribs.*.bg_green = true;},
+            Op.LOWER_OFF => {cell.char = '▄'; attribs.*.fg_green = false; attribs.*.fg_black = true;},
+            Op.UPPER_OFF => {cell.char = '▄'; attribs.*.bg_black = true; attribs.*.bg_green = false;},
+            Op.LOWER_ON => {cell.char = '▄'; attribs.*.fg_green = true; attribs.*.fg_black = false;},
+            Op.UPPER_ON => {cell.char = '▄'; attribs.*.bg_black = false; attribs.*.bg_green = true;},
         }
 
     }
