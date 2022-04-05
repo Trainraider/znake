@@ -1,5 +1,12 @@
 const std = @import("std");
 
+fn fileExistsRel(file: []const u8) bool {
+    const cwd = std.fs.cwd();
+    const f = cwd.openFile(file, .{}) catch return false;
+    f.close();
+    return true;
+}
+
 pub fn build(b: *std.build.Builder) void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
@@ -11,9 +18,14 @@ pub fn build(b: *std.build.Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
+    const clone_zbox = b.addSystemCommand(&.{"git", "clone", "--depth", "1", "https://github.com/Trainraider/zbox.git", "libs/zbox"});
+
     const exe = b.addExecutable("znake", "src/main.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
+    if (!fileExistsRel("libs/zbox/src/box.zig")) {
+        exe.step.dependOn(&clone_zbox.step);
+    }
     exe.addPackagePath("zbox", "libs/zbox/src/box.zig");
     exe.install();
 
