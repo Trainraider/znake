@@ -1,9 +1,18 @@
 const std = @import("std");
 
-fn fileExistsRel(file: []const u8) bool {
+fn relDirExists(dir: []const u8) bool {
     const cwd = std.fs.cwd();
-    const f = cwd.openFile(file, .{}) catch return false;
-    f.close();
+    var d = cwd.openDir(dir, .{}) catch return false;
+    d.close();
+    return true;
+}
+
+fn depsAreInstalled(comptime deps: []const []const u8) bool {
+    for (deps) |dep| {
+        if (!relDirExists(dep)){
+            return false;
+        }
+    }
     return true;
 }
 
@@ -18,13 +27,16 @@ pub fn build(b: *std.build.Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    const clone_zbox = b.addSystemCommand(&.{"git", "clone", "--depth", "1", "https://github.com/Trainraider/zbox.git", "libs/zbox"});
+    const clone_submodules = b.addSystemCommand(&.{"git", "submodule", "update", "--init", "--recursive"});
 
     const exe = b.addExecutable("znake", "src/main.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
-    if (!fileExistsRel("libs/zbox/src/box.zig")) {
-        exe.step.dependOn(&clone_zbox.step);
+    const deps = &.{
+        "libs/zbox", 
+    };
+    if (!depsAreInstalled(deps)) {
+        exe.step.dependOn(&clone_submodules.step);
     }
     exe.addPackagePath("zbox", "libs/zbox/src/box.zig");
     exe.install();
