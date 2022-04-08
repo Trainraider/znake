@@ -1,9 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const zbox = @import("zbox");
-const c = @cImport({
-    @cInclude("stdlib.h");
-});
 
 const Allocator = std.mem.Allocator;
 const allocator: Allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;
