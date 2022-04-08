@@ -125,6 +125,7 @@ const Snake = struct {
     alloc: Allocator,
     display: *Grid,
     dead: bool = false,
+    _init_length: u64,
     _head: u64,
     _tail: u64,
 
@@ -136,6 +137,7 @@ const Snake = struct {
             .y = try alloc.alloc(?u64, area),
 
             .length = length,
+            ._init_length = length,
             .alloc = alloc,
             .display = display,
             ._head = 0,
@@ -148,6 +150,24 @@ const Snake = struct {
         display.setCell(snake.x[0].?, snake.y[0].?, true) catch unreachable;
         
         return snake;
+    }
+
+    pub fn reset(self: *Snake) void {
+        for (self.*.x[0..self.*.length]) |_,i| {
+            if (self.*.x[i]) |_| {
+                self.*.display.setCell(self.*.x[i].?, self.*.y[i].?, false) catch unreachable;
+            }
+        }
+        std.mem.set(?u64, self.*.x[1..self.*.length], null);
+        std.mem.set(?u64, self.*.y[1..self.*.length], null);
+        self.*.length = self.*._init_length;
+        self.*._head = 0;
+        self.*._tail = sub(u64, self.*.length, 1) catch unreachable;
+        self.*.dir = null;
+
+        self.*.y[0] = self.*.display.height;
+        self.*.x[0] = self.*.display.width >> 1;
+        self.*.dead = false;
     }
 
     pub fn deinit(self: Snake) void {
@@ -251,6 +271,13 @@ pub fn main() !void {
             .right => if (snake.dir != Direction.left) {snake.dir = Direction.right;},
             .up => if (snake.dir != Direction.down) {snake.dir = Direction.up;},
             .down => if (snake.dir != Direction.up) {snake.dir = Direction.down;},
+            .other => |data| {
+                if (data[0] == 'r' and snake.dead) {
+                    snake.reset();
+                    var curs = output.cursorAt(0,0);
+                    try curs.writer().writeByteNTimes(' ', size.width + 1);
+                }
+            },
             else => {},
         }
 
@@ -258,6 +285,9 @@ pub fn main() !void {
         
         var score_curs = output.cursorAt(0,3);
         try score_curs.writer().print("Score: {d}", .{snake.length - initial_length});
+        if (snake.dead) {
+            try score_curs.writer().print(" Play Again - R", .{});
+        }
         
         try zbox.push(output);
     }
