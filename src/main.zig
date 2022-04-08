@@ -63,6 +63,31 @@ const Grid = struct {
         };
     }
 
+    fn reset(self: *Grid, display: *zbox.Buffer, x: u64, y: u64, width: u64, height: u64) void{
+        const cell: zbox.Cell = .{
+            .char = '▄',
+            .attribs = .{
+                .fg_black = true,
+                .bg_black = true,
+            },
+        };
+        var i: u64 = 0;
+        while (i < width) {
+            var j: u64 = 0;
+            while (j < height) {
+                display.cellRef(j + y, i + x).* = cell;
+                j += 1;
+            }
+            i += 1;
+        }
+
+        self.display = display;
+        self.x = x;
+        self.y = y;
+        self.width = width;
+        self.height = height;
+    }
+
     fn setCell(self: *Grid, x: u64, y: u64, on: bool) !void {
         if (x >= self.width or y >= self.height << 1) return GridError.OutOfBounds;
 
@@ -141,10 +166,13 @@ const Snake = struct {
         return snake;
     }
 
-    pub fn reset(self: *Snake) void {
+    pub fn reset(self: *Snake) !void {
         for (self.*.x[0..self.*.length]) |_,i| {
             if (self.*.x[i]) |_| {
-                self.*.display.setCell(self.*.x[i].?, self.*.y[i].?, false) catch unreachable;
+                const size = try zbox.size();
+                if (self.*.x[i].? < size.width and self.*.y[i].? < size.height) {
+                    self.*.display.setCell(self.*.x[i].?, self.*.y[i].?, false) catch unreachable;
+                }
             }
         }
         std.mem.set(?u64, self.*.x[1..self.*.length], null);
@@ -214,6 +242,22 @@ const Snake = struct {
     }
 };
 
+fn reset(snake: *Snake, food: *Food, display: *zbox.Buffer) !void {
+    try snake.*.reset();
+    const size = try zbox.size();
+    snake.*.display.reset(display, 0, 1, size.width, size.height - 1);
+    var i: u64 = 0;
+    const cell: zbox.Cell = .{
+        .char = ' ',
+        .attribs = .{.bg_black = false, .fg_black = false, .bg_green = false, .fg_green = false,},
+    };
+    while (i < size.width) {
+        display.cellRef(0, i).* = cell;
+        i += 1;
+    }
+    food.*.place();
+}
+
 pub fn main() !void {
     const random = try std.fs.openFileAbsolute("/dev/random", .{
         .mode = std.fs.File.OpenMode.read_only,
@@ -251,8 +295,13 @@ pub fn main() !void {
 
     while (try zbox.nextEvent()) |e| {
 
-        size = try zbox.size();
-        try output.resize(size.height, size.width);
+        const new_size = try zbox.size();
+        if (new_size.width != size.width or new_size.height != size.height) {
+            size.height = new_size.height;
+            size.width = new_size.width;
+            try output.resize(size.height, size.width);
+            try reset(&snake, &food, &output);
+        }
 
         switch (e) {
             .escape => return,
@@ -262,9 +311,8 @@ pub fn main() !void {
             .down => if (snake.dir != Direction.up) {snake.dir = Direction.down;},
             .other => |data| {
                 if (data[0] == 'r' and snake.dead) {
-                    snake.reset();
-                    var curs = output.cursorAt(0,0);
-                    try curs.writer().writeByteNTimes(' ', size.width + 1);
+                    try reset(&snake, &food, &output);
+                    continue;
                 }
             },
             else => {},
